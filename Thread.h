@@ -8,17 +8,15 @@ class Thread_Arg
 {
 public:
     Player *player;
-    Collectable *collectable;
     sf::RenderWindow *window;
     int playerNum;
     int windowSize;
 
 public:
     Thread_Arg(){}
-    void init(Player* p, Collectable *c, sf::RenderWindow * w, const int &s, int& i)
+    void init(Player* p, sf::RenderWindow * w, const int &s, int& i)
     {
         player = p;
-        collectable = c;
         window = w;
         playerNum = i;
         windowSize = s;
@@ -35,9 +33,9 @@ public:
         pthread_attr_init(&attr);
         pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
     }
-    void create(void* (*function)(void*), sf::RenderWindow &window)
+    void create(void* (*function)(void*), Thread_Arg &arg)
     {
-        pthread_create(&thread, &attr, function, &window);
+        pthread_create(&thread, &attr, function, &arg);
         std:: cout << "Thread created." << std::endl; 
     }
 };

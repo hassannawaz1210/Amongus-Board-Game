@@ -13,7 +13,7 @@ class Collectable
 {
 public:
 	sf::CircleShape shape;
-
+public:
 	Collectable() {}
 
 	void initCollectable(const int &n, bool **occupiedCells)

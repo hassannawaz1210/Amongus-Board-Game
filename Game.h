@@ -10,7 +10,6 @@
 #include "Timer.h"
 #include <queue>
 #include <atomic>
-#include <vector>
 
 
 #define ROLL_NO 2993
@@ -40,6 +39,8 @@ int generate_n()
 
 
 int Player::textureNumber = 1;
+
+
 class Game
 {
 public:
@@ -49,23 +50,72 @@ public:
 
     static void* thread_func (void* argument)
     {
-        //Thread_Arg *arg = static_cast<Thread_Arg*>(argument);
+        Thread_Arg *arg = static_cast<Thread_Arg*>(argument);
         sf::RenderWindow  *window = static_cast<sf::RenderWindow*>(argument);
         sf::Event event;
         while (window->isOpen())
         {
             while(messageQueueLock.exchange(true)) {}
-            if(window->pollEvent(event))
+
+                while(eventQueue.empty() == false)
             {
-                eventQueue.push(event);
-            }
+                event = eventQueue.front();
+                eventQueue.pop();
+                switch (event.type)
+                {
+                    case sf::Event::KeyPressed:
+                    {
+                        sf::Vector2f pos;
+                        for (int i = 0; i < 3; i++)
+                        {
+							if (event.key.code == arg->player[i].left     &&      arg->player[i].x() > 1)
+                            {
+                                    pos = sf::Vector2f(arg->player[i].x() - CELL_SIZE, arg->player[i].y());
+									arg->player[i].shape.setPosition(pos);
+                                    arg->player[i].currentCell.x -= 1;
+                                    arg->player[i].scoreText.setPosition(pos.x, pos.y - 20);
+                                    arg->player[i].shape.setTextureRect(sf::IntRect(arg->player[i].playerTexture.getSize().x, 0, -arg->player[i].playerTexture.getSize().x, arg->player[i].playerTexture.getSize().y));
+
+                            }
+							if (event.key.code == arg->player[i].right    &&     arg->player[i].x() < arg->windowSize - CELL_SIZE - 1)
+                            {
+                                    pos = sf::Vector2f(arg->player[i].x() + CELL_SIZE, arg->player[i].y());
+									arg->player[i].shape.setPosition(pos);
+                                    arg->player[i].currentCell.x += 1;
+                                    arg->player[i].scoreText.setPosition(pos.x, pos.y - 20);
+                                    arg->player[i].shape.setTextureRect(sf::IntRect(0, 0, CELL_SIZE, CELL_SIZE));
+                                    arg->player[i].shape.setTextureRect(sf::IntRect(0, 0, arg->player[i].playerTexture.getSize().x, arg->player[i].playerTexture.getSize().y));
+                            }
+							if (event.key.code == arg->player[i].up       &&       arg->player[i].y() > 1)
+                            {
+                                    pos = sf::Vector2f(arg->player[i].x(), arg->player[i].y() - CELL_SIZE);
+									arg->player[i].shape.setPosition(pos);
+                                    arg->player[i].currentCell.y -= 1;
+                                    arg->player[i].scoreText.setPosition(pos.x, pos.y - 20);
+                            }
+							if (event.key.code == arg->player[i].down     &&   arg->player[i].y() < arg->windowSize - CELL_SIZE - 1)
+                            {
+                                    pos = sf::Vector2f(arg->player[i].x(), arg->player[i].y() + CELL_SIZE);
+									arg->player[i].shape.setPosition(sf::Vector2f(arg->player[i].x(), arg->player[i].y() + CELL_SIZE));
+                                    arg->player[i].currentCell.y += 1;
+                                    arg->player[i].scoreText.setPosition(pos.x, pos.y - 20);
+                            }
+                        }
+                        break;
+                    }
+
+                    default:
+                        break;
+                }
+        }
+
             messageQueueLock.exchange(false);
         }
             
         pthread_exit(0);
     }
 
-	void launch()
+	int launch()
 	{
         std::cout << "Number of players: " << numOfPlayers << std::endl;
         const int n = generate_n();
@@ -73,12 +123,16 @@ public:
         
         Soundtrack soundtrack;
         soundtrack.play();
+        //-----------------
+        sf::Sound itemPickUpSound;
+        sf::SoundBuffer pickUpSoundBuffer;
+        pickUpSoundBuffer.loadFromFile("itemPickUpSound.ogg");
+        itemPickUpSound.setBuffer(pickUpSoundBuffer);
+        itemPickUpSound.setVolume(150);
+
 
         Grid grid(n); //------- n x n grid
         grid.create();
-
-        
-
 
         //occupiedCells is used to keep track of which cell is occupied by player or collectable
         bool** occupiedCells = new bool* [n];
@@ -116,82 +170,27 @@ public:
         Thread thread[numOfPlayers];
         for (int i = 0; i < numOfPlayers; i++)
         {
-            //arg[i].init(&player[i], &collectable[i], &window, windowSize, i);
-            thread[i].create(thread_func, window);
+            arg[i].init(player, &window, windowSize, i);
+            thread[i].create(thread_func, arg[i]);
         }
         
         while (window.isOpen())
         {
             sf::Event event;
+            
 
             //------- handling events
             while(messageQueueLock.exchange(true)) {}
-            while(eventQueue.empty() == false)
+            if(window.pollEvent(event))
             {
-                event = eventQueue.front();
-                eventQueue.pop();
-                switch (event.type)
-                {
-                    case sf::Event::EventType::Closed:
+                eventQueue.push(event);
+                if(event.type == sf::Event::Closed)
                     {
                         window.close();
-                        break;
+                        return -1;
                     }
-                    
-                    case sf::Event::EventType::KeyReleased:
-                    {
-                        if (event.key.code == sf::Keyboard::Key::Escape) window.close();
-                        break;
-                    }
-                    
-                    case sf::Event::KeyPressed:
-                    {
-                        sf::Vector2f pos;
-                        for (int i = 0; i < numOfPlayers; i++)
-                        {
-							if (event.key.code == player[i].left     &&      player[i].x() > 1)
-                            {
-                                    pos = sf::Vector2f(player[i].x() - CELL_SIZE, player[i].y());
-									player[i].shape.setPosition(pos);
-                                    player[i].currentCell.x -= 1;
-                                    player[i].scoreText.setPosition(pos.x, pos.y - 20);
-                                    player[i].shape.setTextureRect(sf::IntRect(player[i].playerTexture.getSize().x, 0, -player[i].playerTexture.getSize().x, player[i].playerTexture.getSize().y));
-
-                            }
-							if (event.key.code == player[i].right    &&     player[i].x() < windowSize - CELL_SIZE - 1)
-                            {
-                                    pos = sf::Vector2f(player[i].x() + CELL_SIZE, player[i].y());
-									player[i].shape.setPosition(pos);
-                                    player[i].currentCell.x += 1;
-                                    player[i].scoreText.setPosition(pos.x, pos.y - 20);
-                                    player[i].shape.setTextureRect(sf::IntRect(0, 0, CELL_SIZE, CELL_SIZE));
-                                    player[i].shape.setTextureRect(sf::IntRect(0, 0, player[i].playerTexture.getSize().x, player[i].playerTexture.getSize().y));
-
-                                    
-                            }
-							if (event.key.code == player[i].up       &&       player[i].y() > 1)
-                            {
-                                    pos = sf::Vector2f(player[i].x(), player[i].y() - CELL_SIZE);
-									player[i].shape.setPosition(pos);
-                                    player[i].currentCell.y -= 1;
-                                    player[i].scoreText.setPosition(pos.x, pos.y - 20);
-                            }
-							if (event.key.code == player[i].down     &&   player[i].y() < windowSize - CELL_SIZE - 1)
-                            {
-                                    pos = sf::Vector2f(player[i].x(), player[i].y() + CELL_SIZE);
-									player[i].shape.setPosition(sf::Vector2f(player[i].x(), player[i].y() + CELL_SIZE));
-                                    player[i].currentCell.y += 1;
-                                    player[i].scoreText.setPosition(pos.x, pos.y - 20);
-                            }
-                        }
-                        break;
-                    }
-
-                    default:
-                        break;
-                }
-        }
-                messageQueueLock.exchange(false);
+            }
+            messageQueueLock.exchange(false);
             
 
             //------- updating frame
@@ -199,6 +198,20 @@ public:
             {
                 timer.timeLeft -= 1;
                 timer.clock.restart();
+            }
+            if(timer.timeLeft == 0)
+            {
+                int maxScore = 0;
+                int playerIndex = 0;
+                for (int  i = 0; i < numOfPlayers; i++)
+                {
+                    if(player[i].itemCollected > maxScore)
+                    {
+                        maxScore = player[i].itemCollected;
+                        playerIndex = i;
+                    }
+                }
+                return playerIndex;
             }
             timer.timerText.setString("Time left: " + std::to_string(timer.timeLeft) + " mins");
 
@@ -213,6 +226,7 @@ public:
                         collectableCont.collectables.erase(collectableCont.collectables.begin() + j);
                         occupiedCells[player[i].currentCell.x][player[i].currentCell.y];
                         player[i].scoreText.setString("Score: " + std::to_string(player[i].itemCollected));
+                        itemPickUpSound.play();
                     }
                 }
                 
@@ -249,5 +263,6 @@ public:
             window.display();
 
         }
+        return 0;
 	}
 };

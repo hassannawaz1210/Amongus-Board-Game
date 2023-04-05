@@ -3,7 +3,7 @@
 #include <SFML/Graphics.hpp>
 #include <SFML/System.hpp>
 
-#define GAME_TIME 4
+#define GAME_TIME 1
 
 class Timer
 {
